@@ -46,7 +46,7 @@ class WorkspaceContext:
         for item in data['items']:
             if item['kind'] == 'application':
                 if Path(item.get('path', '')).is_file():
-                    references.append('Application selected in the library (a binary, not a document): ' + json.dumps(item['path']) + '. Do not execute it merely to inspect or preview it. Vision provides a separate explicit Open action with a real Defender scan gate.')
+                    references.append('Application selected in the library (a binary, not a document): ' + json.dumps(item['path']) + '. Do not execute it merely to inspect or preview it. Vision provides a separate explicit Open action; check the actual scan status and never claim that a file is safe based on its hash or a scanner result.')
                 continue
             if item['kind'] == 'folder':
                 if Path(item.get('path', '')).is_dir():

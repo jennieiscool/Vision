@@ -10,13 +10,14 @@ from pathlib import Path
 
 import yaml
 from fastapi import HTTPException, Request
+from .platform_support import IS_WINDOWS, process_options
 
 
 def install_desktop_settings(app, gateway, config, root, connected, apply_configuration, install_prompt):
     runtime = root / 'runtime'
     preferences_path = runtime / 'desktop-preferences.json'
     preferences = json.loads(preferences_path.read_text()) if preferences_path.exists() else {}
-    preferences.setdefault('name', os.environ.get('USERNAME', 'My profile'))
+    preferences.setdefault('name', os.environ.get('USERNAME') or os.environ.get('USER', 'My profile'))
     app.state.vision_locked = bool(preferences.get('password_hash') and preferences.get('lock_on_start'))
     inventory = {}
     failed_attempts = 0
@@ -31,11 +32,27 @@ def install_desktop_settings(app, gateway, config, root, connected, apply_config
             raise HTTPException(409, 'Finish the current task before changing this setting.')
 
     async def scan():
+        if not IS_WINDOWS:
+            import platform
+            import shutil
+            from .platform_support import user_data_home
+            info = platform.freedesktop_os_release() if hasattr(platform, 'freedesktop_os_release') else {}
+            inventory.update({
+                'overview': {'OS': info.get('PRETTY_NAME', platform.platform()), 'Architecture': platform.machine(),
+                             'Desktop': os.environ.get('XDG_CURRENT_DESKTOP', 'Unknown'), 'Session type': os.environ.get('XDG_SESSION_TYPE', 'Unknown')},
+                'devices': {'Audio/Video': 'Managed by the Linux desktop and browser permission portals.'},
+                'drives': {'Home': str(Path.home()), 'Free space bytes': shutil.disk_usage(Path.home()).free},
+                'settings': {'Desktop': os.environ.get('XDG_CURRENT_DESKTOP', 'Unknown'), 'Session type': os.environ.get('XDG_SESSION_TYPE', 'Unknown'), 'Shell': os.environ.get('SHELL', '')},
+                'apps': {'Desktop entries': len(list(Path('/usr/share/applications').glob('*.desktop'))) + len(list(user_data_home() / 'applications').glob('*.desktop'))},
+                'updated': time.time(),
+            })
+            (runtime / 'system-inventory.json').write_text(json.dumps(inventory, indent=2), encoding='utf-8')
+            return
         for area in ['overview', 'devices', 'drives', 'settings', 'apps']:
             process = await asyncio.create_subprocess_exec(
                 'powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
                 '-File', str(root / 'backend/windows-system.ps1'), '-Area', area,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, creationflags=0x08000000)
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, **process_options())
             try:
                 output, _ = await asyncio.wait_for(process.communicate(), 50)
                 value = json.loads(output.decode('utf-8-sig', errors='replace'))

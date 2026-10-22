@@ -2,10 +2,12 @@
 import asyncio
 import json
 import os
+import shutil
 import time
 from collections import deque
 from pathlib import Path
 from .conversations import Conversations
+from .platform_support import IS_WINDOWS, hermes_command, user_data_home
 
 
 class HermesGateway:
@@ -58,18 +60,23 @@ class HermesGateway:
     async def start(self):
         self.conversations.active = 'main'
         hermes = Path(self.config["hermes_path"])
-        python = hermes / "venv/Scripts/python.exe"
-        if not python.is_file():
-            raise RuntimeError(f"Vision engine interpreter missing: {python}")
+        hermes_home = Path(self.config.get("hermes_home") or hermes.parent)
+        command = hermes_command(hermes_home, "--run-module", "backend.native_gateway")
+        if not Path(command[0]).is_file():
+            raise RuntimeError(f"Hermes launcher missing: {command[0]}")
         env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
         env["VISION_APP_BRIDGE_TOKEN"] = getattr(self, "app_bridge_token", "")
         env["HERMES_HOME"] = str(Path(self.config.get("hermes_home") or hermes.parent))
         env['PYTHONPATH'] = str(self.root) + os.pathsep + env.get('PYTHONPATH', '')
         env["BROWSER_CDP_URL"] = "http://127.0.0.1:9227"
         # Desktop processes can retain an older PATH after a per-user driver install.
-        driver = self.root / 'runtime/computer-driver/cua-driver.exe'
+        driver = self.root / 'runtime/computer-driver' / ('cua-driver.exe' if IS_WINDOWS else 'cua-driver')
         if not driver.is_file():
-            driver = Path(os.environ['LOCALAPPDATA']) / 'Programs/Cua/cua-driver/bin/cua-driver.exe'
+            driver = user_data_home() / 'Programs/Cua/cua-driver/bin' / ('cua-driver.exe' if IS_WINDOWS else 'cua-driver')
+        if not driver.is_file() and not IS_WINDOWS:
+            located = shutil.which('cua-driver')
+            if located:
+                driver = Path(located)
         if driver.is_file() and not env.get('HERMES_CUA_DRIVER_CMD'):
             env['HERMES_CUA_DRIVER_CMD'] = str(driver)
         env.setdefault('CUA_DRIVER_RS_TELEMETRY_ENABLED', '0')
@@ -83,7 +90,7 @@ class HermesGateway:
                     stdout=output, stderr=output, creationflags=0x08000000 if os.name == 'nt' else 0,
                 )
         self.process = await asyncio.create_subprocess_exec(
-            str(python), "-u", "-m", "backend.native_gateway", cwd=str(hermes), env=env,
+            *command, cwd=str(hermes), env=env,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE, creationflags=0x08000000 if os.name == "nt" else 0,
             limit=8 * 1024 * 1024,

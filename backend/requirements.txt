@@ -3,7 +3,8 @@ uvicorn[standard]>=0.34,<1
 httpx>=0.28,<1
 python-multipart>=0.0.20
 pyyaml>=6,<7
-pywinpty>=2.0.15
+pywinpty>=2.0.15; sys_platform == "win32"
+pexpect>=4.9,<5; sys_platform == "linux"
 kokoro-onnx>=0.4.9,<1
 soundfile>=0.13
 faster-whisper>=1.2,<2

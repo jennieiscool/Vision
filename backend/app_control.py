@@ -6,7 +6,10 @@ import secrets
 from pathlib import Path
 
 from fastapi import HTTPException, Request
-from . import app_windows as win
+if os.name == 'nt':
+    from . import app_windows as win
+else:
+    from . import app_windows_linux as win
 
 
 def install_app_control(app, root, context):
@@ -194,11 +197,12 @@ def install_app_control(app, root, context):
         record = next((item for item in records if item['id'] == identity), None)
         if not record or not Path(record['path']).is_dir():
             raise HTTPException(404, 'Open a saved workspace first.')
-        candidates = [Path(os.environ.get('LOCALAPPDATA', '')) / 'Programs/Microsoft VS Code/Code.exe',
-                      Path(os.environ.get('ProgramFiles', '')) / 'Microsoft VS Code/Code.exe']
+        candidates = ([Path(os.environ.get('LOCALAPPDATA', '')) / 'Programs/Microsoft VS Code/Code.exe',
+                       Path(os.environ.get('ProgramFiles', '')) / 'Microsoft VS Code/Code.exe'] if os.name == 'nt' else
+                      [Path(path) for path in (os.environ.get('VISION_CODE_BIN', ''), '/usr/bin/code', '/usr/bin/code-insiders') if path])
         code = next((p for p in candidates if p.is_file()), None)
         if not code:
-            raise HTTPException(404, 'Install Microsoft VS Code to use its complete workbench.')
+            raise HTTPException(404, 'Install VS Code to use its complete workbench.')
         return {'executable': str(code), 'args': ['--new-window', '--user-data-dir', str(root / 'runtime/editor-profile'), record['path']],
                 'directory': record['path'], 'name': 'VS Code · ' + record['name'], 'workspace_id': identity,
                 'before': [w['hwnd'] for w in await asyncio.to_thread(win.windows)]}

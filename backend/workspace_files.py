@@ -17,6 +17,7 @@ import xml.etree.ElementTree as ET
 from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlsplit
+from .platform_support import process_options
 
 from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -437,7 +438,7 @@ def install_workspace_files(app, previews, root, context):
                 ffmpeg = shutil.which('ffmpeg')
                 if not ffmpeg:
                     raise HTTPException(422, 'This image format is unavailable on this computer.') from exc
-                process = await asyncio.create_subprocess_exec(ffmpeg, '-y', '-v', 'error', '-i', str(path), '-frames:v', '1', str(target), stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE, creationflags=0x08000000)
+                process = await asyncio.create_subprocess_exec(ffmpeg, '-y', '-v', 'error', '-i', str(path), '-frames:v', '1', str(target), stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE, **process_options())
                 try:
                     await asyncio.wait_for(process.communicate(), 90)
                 except (asyncio.TimeoutError, asyncio.CancelledError):
@@ -465,7 +466,7 @@ def install_workspace_files(app, previews, root, context):
                 args = ['-y', '-v', 'error', '-i', str(path)]
                 args += ['-map', '0:v:0', '-map', '0:a:0?', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2'] if video else ['-vn']
                 args += ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', str(target)]
-                process = await asyncio.create_subprocess_exec(ffmpeg, *args, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE, creationflags=0x08000000)
+                process = await asyncio.create_subprocess_exec(ffmpeg, *args, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE, **process_options())
                 try:
                     _, error = await asyncio.wait_for(process.communicate(), 1800)
                 except (asyncio.CancelledError, asyncio.TimeoutError):

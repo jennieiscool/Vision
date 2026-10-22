@@ -27,11 +27,15 @@ class Browser:
     async def start(self):
         from playwright.async_api import async_playwright
         self.playwright = await async_playwright().start()
-        cache = Path(os.environ["LOCALAPPDATA"]) / "ms-playwright"
-        bundled = self.root / "runtime/chromium/chrome-win64/chrome.exe"
-        available = [bundled] if bundled.is_file() else sorted(cache.glob("chromium-*/chrome-win64/chrome.exe"))
+        if os.name == 'nt':
+            cache = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local")) / "ms-playwright"
+            bundled = self.root / "runtime/chromium/chrome-win64/chrome.exe"
+            available = [bundled] if bundled.is_file() else sorted(cache.glob("chromium-*/chrome-win64/chrome.exe"))
+        else:
+            cache = Path(os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or Path.home() / ".cache/ms-playwright")
+            available = sorted([*cache.glob("chromium-*/chrome-linux/chrome"), *cache.glob("chromium-*/chrome-linux64/chrome")])
         if not available:
-            raise RuntimeError("Chromium is missing. Run setup.ps1 to install it.")
+            raise RuntimeError("Chromium is missing. Run the platform setup script to install it.")
         self.context = await self.playwright.chromium.launch_persistent_context(
             str(self.root / "runtime/browser"), executable_path=str(available[-1]),
             headless=True, viewport={"width": 1280, "height": 800},

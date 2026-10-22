@@ -4,7 +4,7 @@ import re
 import shutil
 from pathlib import Path
 
-home = Path(os.environ["LOCALAPPDATA"]) / "hermes"
+home = Path(os.environ.get("HERMES_HOME") or (Path(os.environ["LOCALAPPDATA"]) / "hermes" if os.name == "nt" else Path.home() / ".hermes"))
 path = home / "config.yaml"
 text = path.read_text(encoding="utf-8")
 match = re.search(r"^model:\s*\n(?:(?:[ \t]+.*|\s*)\n)*", text, re.M)

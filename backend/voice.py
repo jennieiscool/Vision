@@ -61,7 +61,8 @@ class Voice:
             return self.with_captions(buffer.getvalue(), text) if with_timing else buffer.getvalue()
         # About -0.35 semitones, with duration compensated to retain 0.93x pace.
         filters = "asetrate=23520,aresample=24000,atempo=1.020408,bass=g=1.5:f=110,equalizer=f=260:t=q:w=0.8:g=0.8,equalizer=f=2800:t=q:w=1:g=0.6,acompressor=threshold=0.16:ratio=1.35:attack=18:release=200:makeup=1.05,aecho=0.8:0.85:23:0.035,alimiter=limit=0.95"
-        result = subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-i", "pipe:0", "-af", filters, "-f", "wav", "pipe:1"], input=buffer.getvalue(), capture_output=True, timeout=180, creationflags=0x08000000)
+        from .platform_support import process_options
+        result = subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-i", "pipe:0", "-af", filters, "-f", "wav", "pipe:1"], input=buffer.getvalue(), capture_output=True, timeout=180, **process_options())
         if result.returncode:
             raise RuntimeError("Voice post-processing failed")
         # FFmpeg's pipe WAV has unknown-length RIFF fields. Re-encode it with

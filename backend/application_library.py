@@ -15,6 +15,9 @@ from .application_shortcuts import resolve_shortcut
 
 
 def install_application_library(app, root, context):
+    if os.name != 'nt':
+        from .linux_application_library import install_linux_application_library
+        return install_linux_application_library(app, root, context)
     tasks, locks = set(), {}
     scan_slots = asyncio.Semaphore(1)
 

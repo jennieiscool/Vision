@@ -37,7 +37,9 @@ ROOT = Path(__file__).resolve().parent.parent
 RUNTIME = ROOT / "runtime"
 RUNTIME.mkdir(exist_ok=True)
 CONFIG_PATH = RUNTIME / "config.json"
-HERMES_HOME = Path(os.environ.get("HERMES_HOME") or Path(os.environ["LOCALAPPDATA"]) / "hermes")
+from .platform_support import IS_WINDOWS, hermes_command, process_options
+
+HERMES_HOME = Path(os.environ.get("HERMES_HOME") or (Path(os.environ["LOCALAPPDATA"]) / "hermes" if IS_WINDOWS else Path.home() / ".hermes"))
 CONFIG = {
     "hermes_path": str(HERMES_HOME / "hermes-agent"),
     "provider": "", "model": "", "cloud_first": True,
@@ -542,9 +544,13 @@ async def terminal(ws: WebSocket):
         await ws.close(code=4409)
         return
     async with terminal_slots:
-        from winpty import PtyProcess
+        if IS_WINDOWS:
+            from winpty import PtyProcess
+        else:
+            import pexpect
         env = dict(os.environ)
-        env["PATH"] = str(Path(CONFIG["hermes_path"]) / "venv/Scripts") + os.pathsep + env.get("PATH", "")
+        hermes_root = Path(CONFIG["hermes_path"])
+        env["PATH"] = str(hermes_root / ("venv/Scripts" if IS_WINDOWS else ".hermes/bin")) + os.pathsep + env.get("PATH", "")
         env["HERMES_HOME"] = str(Path(CONFIG.get("hermes_home") or Path(CONFIG["hermes_path"]).parent))
         mode = ws.query_params.get("mode", "shell")
         if mode == 'model':
@@ -553,11 +559,15 @@ async def terminal(ws: WebSocket):
                 await ws.close(code=4409)
                 return
             await model_terminal_lock.acquire()
-        shell = os.environ.get("COMSPEC", "C:/Windows/System32/cmd.exe")
+        shell = os.environ.get("COMSPEC", "cmd.exe") if IS_WINDOWS else os.environ.get("SHELL", "/bin/bash")
         if mode == "model":
-            shell = [str(Path(CONFIG["hermes_path"]) / "venv/Scripts/python.exe"), "-m", "hermes_cli.main", "model"]
+            shell = hermes_command(Path(CONFIG.get("hermes_home") or hermes_root.parent), "model")
         try:
-            process = await asyncio.to_thread(PtyProcess.spawn, shell, cwd=str(ROOT), env=env, dimensions=(24, 120))
+            if IS_WINDOWS:
+                process = await asyncio.to_thread(PtyProcess.spawn, shell, cwd=str(ROOT), env=env, dimensions=(24, 120))
+            else:
+                command = shell if isinstance(shell, list) else [shell]
+                process = await asyncio.to_thread(pexpect.spawn, command[0], command[1:], cwd=str(ROOT), env=env, dimensions=(24, 120), encoding=None)
         except Exception as exc:
             if mode == 'model':
                 model_terminal_lock.release()
@@ -567,13 +577,21 @@ async def terminal(ws: WebSocket):
         await gateway.publish("terminal.open", {"text": "Interactive local terminal opened"})
 
         async def output():
-            while process.isalive():
+            while process.isalive() if IS_WINDOWS else True:
                 try:
-                    data = await asyncio.to_thread(process.read, 4096)
+                    data = await asyncio.to_thread(process.read, 4096) if IS_WINDOWS else await asyncio.to_thread(process.read_nonblocking, 4096, 0.2)
                     if data:
-                        await ws.send_text(data)
+                        await ws.send_text(data.decode('utf-8', 'replace') if isinstance(data, bytes) else data)
                 except (EOFError, OSError):
                     return
+                except Exception as exc:
+                    if not IS_WINDOWS:
+                        import pexpect
+                        if isinstance(exc, pexpect.TIMEOUT):
+                            continue
+                        if isinstance(exc, pexpect.EOF):
+                            return
+                    raise
 
         async def input_data():
             while True:
@@ -583,14 +601,15 @@ async def terminal(ws: WebSocket):
                     cols = max(20, min(500, int(message.get("cols", 120))))
                     await asyncio.to_thread(process.setwinsize, rows, cols)
                 elif message.get("type") == "input":
-                    await asyncio.to_thread(process.write, str(message.get("data", ""))[:16384])
+                    data = str(message.get("data", ""))[:16384]
+                    await asyncio.to_thread(process.write, data) if IS_WINDOWS else await asyncio.to_thread(process.send, data)
         tasks = [asyncio.create_task(output()), asyncio.create_task(input_data())]
         try:
             await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         finally:
             for task in tasks:
                 task.cancel()
-            await asyncio.to_thread(process.close, True)
+            await asyncio.to_thread(process.close, True) if IS_WINDOWS else await asyncio.to_thread(process.close, force=True)
             await gateway.publish("terminal.close", {"text": "Interactive terminal closed"})
             if mode == "model":
                 try:

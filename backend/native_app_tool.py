@@ -4,6 +4,7 @@ import json
 import os
 import threading
 import time
+import sys
 
 _lock = threading.RLock()
 _backend = None
@@ -28,7 +29,7 @@ def execute(target, args, human=False):
         action = args.get('action', 'observe')
         recent = _observations.get(identity)
         if action == 'observe' or (human and (not recent or time.monotonic() - recent[0] > 30 or recent[3] != target.get('viewport_revision'))):
-            capture = backend.capture(mode='vision' if human else 'som', pid=int(target['window_pid']), window_id=int(target['hwnd']))
+            capture = backend.capture(mode='vision' if human else 'som', pid=int(target['window_pid']), window_id=int(target['hwnd'], 0) if isinstance(target['hwnd'], str) else int(target['hwnd']))
             if not capture.png_b64 and not capture.elements:
                 raise RuntimeError('The driver could not observe this application: ' + str(capture.window_title))
             _observations.clear()  # driver has a single sticky capture context
@@ -111,7 +112,7 @@ SCHEMA = {'name': 'vision_app', 'description': 'Observe and control the actual a
 def install(server):
     from tools.registry import registry
     registry.register(name='vision_app', toolset='vision_app', schema=SCHEMA, handler=handle,
-                      check_fn=lambda: os.name == 'nt', description='Control managed Vision application previews')
+                      check_fn=lambda: os.name == 'nt' or sys.platform.startswith('linux'), description='Control managed Vision application previews')
     original_toolsets = server._load_enabled_toolsets
 
     def application_toolsets():

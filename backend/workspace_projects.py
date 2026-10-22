@@ -2,6 +2,7 @@
 import asyncio
 import hashlib
 import json
+import os
 import re
 import secrets
 import shutil
@@ -290,6 +291,20 @@ def install_workspace_projects(app, previews, root, context):
             if path == base or not path.exists():
                 raise HTTPException(400, 'Select a file or child folder.')
             def recycle():
+                if os.name != 'nt':
+                    import shutil
+                    import time
+                    from urllib.parse import quote
+                    trash = Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local/share')) / 'Trash'
+                    files, info = trash / 'files', trash / 'info'
+                    files.mkdir(parents=True, exist_ok=True)
+                    info.mkdir(parents=True, exist_ok=True)
+                    name = path.name
+                    while (files / name).exists() or (info / (name + '.trashinfo')).exists():
+                        name = path.stem + '-' + secrets.token_hex(3) + path.suffix
+                    (info / (name + '.trashinfo')).write_text('[Trash Info]\nPath=' + quote(str(path), safe='/') + '\nDeletionDate=' + time.strftime('%Y-%m-%dT%H:%M:%S') + '\n', encoding='utf-8')
+                    shutil.move(str(path), str(files / name))
+                    return
                 import ctypes
                 from ctypes import wintypes
                 class Operation(ctypes.Structure):
