@@ -1,0 +1,33 @@
+.native-app-view{display:flex!important;flex-direction:column;min-width:0;min-height:0;overflow:hidden!important;background:#080704}
+.native-app-toolbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:9px 12px;border-bottom:1px solid #785b29;flex:0 0 auto;background:#171207}
+.native-app-status{font-size:12px;flex:1;min-width:150px;color:#ead49a;line-height:1.5}
+.native-app-stage{flex:1;position:relative;min-height:100px;min-width:0;overflow:hidden;background:transparent}
+.native-app-video{display:block;width:100%;height:100%;object-fit:contain;background:#080704;outline:none}
+.native-app-video:focus-visible{outline:1px solid #e4b94c;outline-offset:-2px}
+.native-app-message{padding:24px;color:#e8d5a8}
+.workspace-source-split{display:flex;flex:1;min-height:0;min-width:0;overflow:hidden;--source-preview-width:45%}
+.workspace-source-pane{display:flex;flex:1;min-width:0;min-height:0}
+.workspace-source-pane>.workspace-code-editor{width:100%;height:100%;flex:1;min-width:0;min-height:0;resize:none}
+.workspace-source-preview{display:flex;flex-direction:column;width:var(--source-preview-width);min-width:0;min-height:0;border-left:1px solid #80612e;overflow:hidden;background:#100d07}
+.workspace-source-preview[hidden],.workspace-source-divider[hidden]{display:none!important}
+.workspace-source-preview>.workspace-code-live{width:100%;height:auto;min-height:0;flex:1;border:0;background:#fff}
+.workspace-source-preview>.workspace-sheet-tools{flex:0 0 auto;display:flex;gap:8px;padding:8px}
+.workspace-source-divider{flex:0 0 7px;width:7px;min-width:7px;padding:0;border:0;background:#30250f;cursor:col-resize;touch-action:none}
+.workspace-source-divider:hover,.workspace-source-divider:focus-visible{background:#b39143;box-shadow:0 0 9px #dcae3d55}
+.workspace-context-menu{position:fixed;z-index:1200;width:220px;max-height:calc(100vh - 16px);overflow:auto;padding:6px;background:#151108f5;border:1px solid #b38a3f;box-shadow:0 10px 45px #000a,0 0 20px #c9982022;display:flex;flex-direction:column;gap:2px}
+.workspace-context-menu .workspace-button{width:100%;border:0;border-radius:0;padding:9px 12px;text-align:left;background:transparent;color:#f1dfb7}
+.workspace-context-menu .workspace-button:hover,.workspace-context-menu .workspace-button:focus-visible{background:#d4ab3b22;outline:1px solid #c49c4755}
+.workspace-context-menu .workspace-button:disabled{opacity:.35}
+.workspace-properties-list{display:grid;grid-template-columns:75px minmax(0,1fr);gap:12px 20px;font-size:13px;line-height:1.6}
+.workspace-properties-list dt{color:#c5aa70}.workspace-properties-list dd{margin:0;overflow-wrap:anywhere;color:#f1dfb7}
+.workspace-tree-tools{display:flex;gap:6px;flex-wrap:wrap;padding:10px 8px!important}
+.workspace-tree-tools>.workspace-parent-button{display:flex;align-items:center;gap:7px;min-height:30px;font-size:12px;padding:5px 9px;color:#f4dfac}
+.workspace-parent-button svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8}
+.workspace-parent-button:disabled{opacity:.3}
+.workspace-tree-dropping{outline:1px solid #e9c25e;outline-offset:-3px;background:#c2951815!important}
+.workspace-workbench-button{margin-left:auto}
+@media(max-width:1000px){.native-app-toolbar{gap:4px}.native-app-toolbar .workspace-button{padding:5px 7px;font-size:11px}}
+
+/* Application frames participate in normal panel clipping and stacking. */
+.native-app-stage{isolation:isolate;contain:layout paint;display:flex;align-items:center;justify-content:center}
+.native-app-video{flex:1;min-width:0;min-height:0;max-width:100%;max-height:100%;user-select:none;touch-action:none}

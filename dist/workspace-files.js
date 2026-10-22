@@ -1,0 +1,104 @@
+/* A shared file workspace: previews and real context for the same conversation. */
+(() => {
+  const panel=document.querySelector('.central-grid'),toolbar=document.querySelector('#preview-toolbar');
+  const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
+  const size=bytes=>bytes>=1073741824?(bytes/1073741824).toFixed(1)+' GB':bytes>=1048576?(bytes/1048576).toFixed(1)+' MB':bytes>=1024?(bytes/1024).toFixed(1)+' KB':bytes+' bytes';
+  const api=async(path,data)=>{const response=await fetch('/api/'+path,data===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const result=await response.json();if(!response.ok)throw Error(result.detail||'The workspace could not open this item.');return result;};
+  const notify=error=>{status.textContent=error.message||String(error);status.classList.toggle('error',!error.success);if(!error.success)window.dispatchEvent(new CustomEvent('vision:error',{detail:error}));};
+  const button=(label,action,parent,cls='workspace-button')=>{const n=el('button',cls,label);n.type='button';n.onclick=()=>Promise.resolve().then(action).catch(notify);parent.append(n);return n;};
+  const picker=el('input');picker.type='file';picker.multiple=true;picker.hidden=true;picker.setAttribute('aria-label','Open files in workspace');panel.append(picker);
+  const launcher=el('button','workspace-launcher-button');launcher.type='button';launcher.title='Workspace actions';launcher.setAttribute('aria-label','Workspace actions');launcher.setAttribute('aria-haspopup','menu');launcher.setAttribute('aria-expanded','false');launcher.setAttribute('aria-controls','workspace-actions-menu');
+  const dots=[];for(let y=5;y<=19;y+=7)for(let x=5;x<=19;x+=7)dots.push('<circle cx="'+x+'" cy="'+y+'" r="1.6"/>');launcher.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+dots.join('')+'</svg>';
+  const menu=el('div','workspace-actions-menu');menu.id='workspace-actions-menu';menu.hidden=true;menu.setAttribute('role','menu');menu.setAttribute('aria-label','Workspace actions');
+  const internal=el('div');internal.hidden=true;panel.append(internal);
+  const browserButton=toolbar.querySelector('.preview-browser-icon'),expandButton=toolbar.querySelector('.preview-text-button'),download=toolbar.querySelector('#preview-download');for(const control of [browserButton,expandButton,download])if(control)internal.append(control);
+  toolbar.append(launcher);panel.append(menu);
+  const closeMenu=()=>{menu.hidden=true;launcher.setAttribute('aria-expanded','false');};
+  const menuItems=[];
+  const action=(label,svg,run,enabled=()=>true)=>{const tile=el('button','workspace-action-tile');tile.type='button';tile.setAttribute('role','menuitem');tile.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+svg+'</svg>';tile.append(el('span','',label));tile.onclick=async()=>{closeMenu();try{await run();}catch(error){notify(error);}};tile._enabled=enabled;menuItems.push(tile);menu.append(tile);return tile;};
+  action('Open files','<path d="M3 7h7l2 2h9l-3 11H3ZM3 7V4h7l2 3"/>',async()=>{if(window.VisionDesktop?.pickFiles){for(const path of await VisionDesktop.pickFiles())await openPath(path);}else picker.click();});
+  action('Open link','<path d="m9 15 6-6M7 14l-2 2a4 4 0 0 0 5 5l4-4M10 7l4-4a4 4 0 0 1 5 5l-2 2"/>',async()=>{const value=await VisionShell.modal('Open and share a link',{input:true,confirm:'Open'});if(value)await openURL(value);});
+  action('Apps','<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',()=>VisionApps.show());
+  action('Workspace','<path d="M3 5h18v14H3ZM3 9h18M9 9v10"/>',()=>VisionProjects.manager());
+  action('New terminal','<path d="m6 8 4 4-4 4M13 16h5M3 4h18v16H3Z"/>',async()=>{if(await VisionProjects.leaveEdit())VisionTerminals.open();});
+  action('Browser','<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18Z"/>',async()=>{if(!await mayLeave())return;browserButton?.click();});
+  action('Expand','<path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/>',()=>expandButton?.click());
+  action('Edit','<path d="m4 16 11-11 4 4L8 20H4ZM13 7l4 4"/>',async()=>{const current=VisionUI.currentPreview();if(current.file)await VisionProjects.editFile(current.file);},()=>{const f=VisionUI.currentPreview().file;return !!f&&!['app-library','project'].includes(f.kind);});
+  action('Save copy','<path d="M12 3v12m-5-5 5 5 5-5M4 15v6h16v-6"/>',()=>download?.click(),()=>!!download&&!download.hidden);
+  launcher.onclick=()=>{const opening=menu.hidden;closeMenu();if(!opening)return;for(const item of menuItems)item.disabled=!item._enabled();menu.hidden=false;launcher.setAttribute('aria-expanded','true');const rect=launcher.getBoundingClientRect(),bounds=panel.getBoundingClientRect();menu.style.top=(rect.bottom-bounds.top+6)+'px';menu.style.right=Math.max(8,bounds.right-rect.right)+'px';menu.querySelector('button:not(:disabled)')?.focus();};
+  menu.onkeydown=event=>{const items=[...menu.querySelectorAll('button')],index=items.indexOf(document.activeElement);if(event.key==='Escape'){event.preventDefault();closeMenu();launcher.focus();}if(event.key==='Tab')closeMenu();const steps={ArrowRight:1,ArrowLeft:-1,ArrowDown:3,ArrowUp:-3};if(event.key in steps){event.preventDefault();let next=index;for(let i=0;i<items.length;i++){next=(next+steps[event.key]+items.length)%items.length;if(!items[next].disabled){items[next].focus();break;}}}};
+  document.addEventListener('pointerdown',event=>{if(!menu.contains(event.target)&&!launcher.contains(event.target))closeMenu();});
+  document.addEventListener('click',event=>{if(event.target.closest('#back,#open-chat'))closeMenu();});
+  const shared=el('div','workspace-shared');shared.setAttribute('aria-label','Shared with Vision AI');toolbar.after(shared);
+  const overlay=el('div','workspace-drop-overlay');overlay.hidden=true;
+  for(const [mode,title,description] of [['preview','Open and share with Vision','Preview files, links and applications'],['edit','Edit / Open in workspace','Expand the editor beside your chat']]){const zone=el('div','workspace-drop-zone');zone.dataset.dropMode=mode;zone.append(el('strong','',title),el('span','',description));overlay.append(zone);}panel.append(overlay);
+  let statusTimer;
+  const status=el('div','workspace-file-status');status.setAttribute('role','status');panel.append(status);
+  async function reloadShared(){try{renderShared(await api('workspace/context'));}catch(error){if(!String(error.message).includes('Unlock'))status.textContent=error.message;}}
+  function renderShared(data){shared.replaceChildren();shared.hidden=!data.items?.length;if(!data.items?.length)return;shared.append(el('span','workspace-shared-label','Shared with Vision'));for(const item of data.items){const chip=el('div','workspace-context-chip');const title=button(item.name,async()=>{if(item.kind==='url')return openURL(item.url);if(item.kind==='application')return VisionApps.show();if(item.kind==='folder')return VisionProjects.openById(item.id);await selectFile(item);},chip,'workspace-context-name');title.title=item.kind==='url'?item.url:item.name;const remove=button('×',async()=>{await closeItems([item.id]);},chip,'workspace-context-remove');remove.title='Close and stop sharing';remove.setAttribute('aria-label','Close '+item.name);shared.append(chip);}}
+  const applications=/\.(exe|com|msi|msix|msixbundle|appx|appxbundle|dll|sys|scr|cpl|lnk|app|apk|dmg|pkg|deb|rpm|appimage|jar)$/i;
+  const code=/\.(py|js|mjs|cjs|ts|tsx|jsx|css|scss|less|json|jsonc|yaml|yml|toml|rs|go|java|c|cpp|h|hpp|cs|sh|ps1|bat|sql|vue|svelte|rb|php|swift|kt)$/i;
+  const mayLeave=()=>window.VisionEditor?VisionEditor.mayLeave():Promise.resolve(true);
+  async function selectFile(file,{edit=false}={}){if(!await mayLeave())return;const state=await api('workspace/previews/reopen',{id:file.id});VisionUI.setDismissed(state.dismissed);VisionUI.addArtifact(file,false);VisionUI.choosePreview(file.id);if(edit)await VisionProjects.editFile(file);}
+  async function closeItems(ids,all=false){if(!await mayLeave())return;const result=await api('workspace/previews/close',{ids,all});VisionUI.setDismissed(result.dismissed);for(const id of ids){const file=VisionUI.previewFile(id);if(file?.kind==='native-app')await fetch('/api/app-control/sessions/'+file.appSession+'/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'detach'})});VisionUI.closePreview(id);VisionUI.closePreview('project-'+id);}await reloadShared();}
+  async function opened(result,mode){await selectFile(result,{edit:mode==='edit'||code.test(result.name)});await reloadShared();}
+  async function openPath(path,mode='preview'){
+    if(applications.test(path)){await VisionApps.addPath(path);return;}
+    await opened(await api('workspace/open',{path}),mode);
+  }
+  async function openFiles(files,mode='preview'){
+    status.classList.remove('error');let openedCount=0;
+    for(const file of files){try{status.textContent='Opening '+file.name+'…';let path='';try{path=window.VisionDesktop?.filePath(file)||'';}catch{}
+      if(applications.test(file.name)){if(path)await VisionApps.addPath(path);else await VisionApps.upload(file);openedCount++;continue;}
+      if(path)await openPath(path,mode);else{const form=new FormData();form.append('file',file);const response=await fetch('/api/workspace/files',{method:'POST',body:form});const result=await response.json();if(!response.ok)throw Error(result.detail||'Could not open '+file.name);await opened(result,mode);}openedCount++;
+    }catch(error){notify(error);}}
+    if(openedCount){status.textContent='Opened '+openedCount+' '+(openedCount===1?'item.':'items.');clearTimeout(statusTimer);statusTimer=setTimeout(()=>{status.textContent='';},4000);}await reloadShared();
+  }
+  async function openURL(value){if(!await mayLeave())return;let url=value.trim();if(/^www\./i.test(url))url='https://'+url;const parsed=new URL(url);if(!['http:','https:'].includes(parsed.protocol))throw Error('Use an http or https link.');if(applications.test(parsed.pathname))throw Error('Download the application first, then add its file to Apps.');const result=await api('workspace/links',{url:parsed.href});status.classList.remove('error');status.textContent='Opening '+result.name+'…';await reloadShared();const opened=await VisionBrowser.open(result.url);status.textContent=opened===false?'The link was shared, but its browser preview could not open.':'Link shared with Vision AI.';if(opened!==false){clearTimeout(statusTimer);statusTimer=setTimeout(()=>{status.textContent='';},4000);}}
+  picker.onchange=()=>{openFiles([...picker.files]);picker.value='';};panel.tabIndex=0;
+  panel.addEventListener('paste',event=>{if(event.target.closest('#browser-view,input,textarea,[contenteditable=true]'))return;const files=[...event.clipboardData.files];if(files.length){event.preventDefault();openFiles(files);return;}const text=event.clipboardData.getData('text/plain').trim();if(/^(https?:\/\/|www\.)/i.test(text)){event.preventDefault();openURL(text).catch(notify);}});
+  let dragDepth=0;
+  const supports=event=>[...event.dataTransfer.types].some(type=>['Files','text/uri-list','text/plain','text/html'].includes(type));
+  panel.addEventListener('dragenter',event=>{if(!supports(event))return;event.preventDefault();dragDepth++;overlay.hidden=false;});
+  panel.addEventListener('dragover',event=>{if(!supports(event))return;event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect='copy';overlay.hidden=false;for(const zone of overlay.children)zone.classList.toggle('active',zone.contains(event.target));});
+  panel.addEventListener('dragleave',event=>{if(!supports(event))return;if(--dragDepth<=0){dragDepth=0;overlay.hidden=true;}});
+  panel.addEventListener('drop',async event=>{event.preventDefault();event.stopPropagation();const mode=event.target.closest('[data-drop-mode]')?.dataset.dropMode||'preview';dragDepth=0;overlay.hidden=true;const files=[...event.dataTransfer.files];if(files.length){try{if(document.querySelector('#workspace').classList.contains('editing'))await VisionProjects.importFiles(files);else await openFiles(files,mode);}catch(error){notify(error);}return;}let text=event.dataTransfer.getData('text/uri-list').split(/\r?\n/).find(line=>line&&!line.startsWith('#'))||event.dataTransfer.getData('text/plain').trim();if(!text){const html=event.dataTransfer.getData('text/html');if(html){const doc=new DOMParser().parseFromString(html,'text/html');text=doc.querySelector('a[href]')?.getAttribute('href')||doc.querySelector('img[src]')?.getAttribute('src')||'';}}try{if(!text)throw Error('Drop a file or an http/https link.');await openURL(text);}catch(error){notify(error);}});
+  document.addEventListener('dragend',()=>{dragDepth=0;overlay.hidden=true;});
+  window.addEventListener('vision:preview-selected',closeMenu);
+  window.addEventListener('vision:workspace-context',event=>renderShared(event.detail));
+  window.addEventListener('vision:workspace-refresh',reloadShared);
+  function table(rows,{offset=0,spreadsheet=false}={}){const wrap=el('div','workspace-table-scroll'),table=el('table','workspace-table'),body=el('tbody');if(spreadsheet){const head=el('thead'),tr=el('tr');tr.append(el('th','row-number',''));const columns=Math.max(0,...rows.map(row=>row.length));for(let i=0;i<columns;i++){let value=i+1,name='';while(value){value--;name=String.fromCharCode(65+value%26)+name;value=Math.floor(value/26);}tr.append(el('th','',name));}head.append(tr);table.append(head);}rows.forEach((row,index)=>{const tr=el('tr');if(spreadsheet)tr.append(el('th','row-number',offset+index+1));for(const value of row)tr.append(el('td','',String(value??'')));body.append(tr);});table.append(body);wrap.append(table);return wrap;}
+  async function render(file,target,url){
+    const token=Symbol();target._workspaceToken=token;target.className='workspace-file-view';const alive=()=>target._workspaceToken===token&&!target.hidden;
+    if(file.kind==='native-app'){VisionAppSurfaces.render(file,target);return;}
+    if(file.kind==='app-library'){VisionApps.render(target);return;}
+    if(file.kind==='project'){VisionProjects.renderProject(file,target);return;}
+    const extension=file.name.split('.').pop().toLowerCase(),type=file.media_type||'';
+    const message=el('div','workspace-preview-loading','Opening '+file.name+'…');target.append(message);
+    const loaded=()=>{if(alive())message.remove();};
+    const fallback=text=>{if(!alive())return;target.replaceChildren();const card=el('div','workspace-file-info');card.innerHTML='<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M12 5h16l9 9v29H12ZM28 5v10h9M18 24h13M18 30h13"/></svg>';card.append(el('h3','',file.name),el('p','',text),el('small','',size(file.size||0)+' · '+(extension?extension.toUpperCase():'File')));const save=el('a','workspace-save-link','Save a copy');save.href=url+'?download=1';save.download=file.name;card.append(save);target.append(card);};
+    try{
+      if(type.startsWith('image/')||['tif','tiff','heic','heif','avif','ico','bmp'].includes(extension)){
+        const stage=el('div','workspace-image-stage'),image=el('img','workspace-image');image.alt=file.name;image.draggable=false;let converted=['tif','tiff','heic','heif'].includes(extension),zoom=1;
+        image.onload=loaded;image.onerror=()=>{if(!alive())return;if(!converted){converted=true;image.src='/api/workspace/'+file.id+'/image';}else fallback('This image format cannot be displayed on this computer. The original file is still shared with Vision.');};image.src=converted?'/api/workspace/'+file.id+'/image':url;stage.append(image);
+        const controls=el('div','workspace-image-controls');const adjust=amount=>{zoom=Math.min(6,Math.max(.25,zoom+amount));image.style.transform='scale('+zoom+')';};button('−',()=>adjust(-.25),controls);button('Fit',()=>{zoom=1;image.style.transform='';},controls);button('+',()=>adjust(.25),controls);target.append(stage,controls);return;
+      }
+      if(extension==='pdf'){await VisionPDFViewer.create(file,target,null,alive);loaded();return;}
+      if(['html','htm'].includes(extension)){const frame=el('iframe','workspace-document-frame');frame.title=file.name;frame.setAttribute('sandbox','allow-scripts allow-downloads');frame.onload=loaded;frame.src=file.preview_url||url;target.append(frame);return;}
+      const videos=['mp4','webm','mkv','mov','avi','wmv','m4v','mpeg','mpg','3gp','mts','m2ts'];const audios=['mp3','wav','ogg','m4a','aac','flac','aiff','aif','wma','opus'];
+      if(type.startsWith('video/')||type.startsWith('audio/')||videos.includes(extension)||audios.includes(extension)){
+        const video=type.startsWith('video/')||videos.includes(extension),media=el(video?'video':'audio','workspace-media');media.controls=true;media.preload='metadata';media.playsInline=true;let converting=false;media.onloadedmetadata=loaded;media.onerror=async()=>{if(converting||!alive())return;converting=true;message.textContent='Preparing a compatible media preview…';if(!message.isConnected)target.append(message);try{const result=await api('workspace/'+file.id+'/media',{});if(alive()){media.src=result.url;media.load();}}catch(error){fallback(error.message);}};media.src=url;target.append(media);return;
+      }
+      let request=0;const load=async(params={})=>{const version=++request;const query=new URLSearchParams(params);const data=await api('workspace/'+file.id+'/view?'+query);if(!alive()||request!==version)return;target.replaceChildren();
+        if(data.kind==='sheet'){const tools=el('div','workspace-sheet-tools'),sheets=el('select');sheets.setAttribute('aria-label','Worksheet');for(const name of data.sheets)sheets.append(new Option(name,name));sheets.value=data.sheet;sheets.onchange=()=>load({sheet:sheets.value,offset:0}).catch(error=>fallback(error.message));tools.append(sheets);const previous=button('Previous',()=>load({sheet:data.sheet,offset:Math.max(0,data.offset-150)}),tools),next=button('Next',()=>load({sheet:data.sheet,offset:data.offset+150}),tools);previous.disabled=!data.offset;next.disabled=!data.more;tools.append(el('span','workspace-page-label',data.rows.length?'Rows '+(data.offset+1)+'–'+(data.offset+data.rows.length)+(data.total?' of '+data.total:''):'Empty sheet'));target.append(tools,table(data.rows,{offset:data.offset,spreadsheet:true}));}
+        else if(data.kind==='document'){const doc=el('article','workspace-document rich-text');for(const block of data.blocks){if(block.kind==='table')doc.append(table(block.rows));else if(block.kind==='image'){const image=el('img');image.src=block.url;image.alt='Document image';image.loading='lazy';doc.append(image);}else doc.append(el(block.kind==='heading'?'h'+Math.min(6,Math.max(1,block.level)):'p','',block.text));}target.append(doc);}
+        else if(data.kind==='slides'){if(!data.count){fallback('This presentation has no slides.');return;}const tools=el('div','workspace-sheet-tools'),prev=button('Previous',()=>load({page:data.index-1}),tools),next=button('Next',()=>load({page:data.index+1}),tools);prev.disabled=!data.index;next.disabled=data.index+1>=data.count;tools.append(el('span','workspace-page-label','Slide '+(data.index+1)+' of '+data.count));const page=el('div','workspace-slide');page.style.aspectRatio=data.ratio||16/9;for(const shape of data.shapes){const n=el(shape.kind==='image'?'img':'div','workspace-slide-'+shape.kind);Object.assign(n.style,{left:shape.x+'%',top:shape.y+'%',width:shape.w+'%',height:shape.h+'%'});if(shape.kind==='image'){n.src=shape.url;n.alt='Slide image';}else if(shape.kind==='table')n.append(table(shape.rows));else n.textContent=shape.text;page.append(n);}target.append(tools,page);}
+        else if(data.kind==='archive'){const title=el('div','workspace-sheet-tools');title.append(el('span','','Archive contents · '+data.total+' entries'));target.append(title,table([['Name','Size'],...data.entries.map(item=>[item.name,item.folder?'Folder':size(item.size)])]));}
+        else if(data.kind==='markdown'){const doc=el('article','workspace-document rich-text');VisionRichText.render(doc,data.text);target.append(doc);}
+        else if(data.kind==='text'){const pre=el('pre','workspace-text',data.text);target.append(pre);if(data.truncated)target.append(el('p','workspace-preview-note','Showing the first 1 MB. Vision can access the complete original file.'));}
+        else{fallback('This format has no built-in visual preview. Vision can still access the original file.');if(data.bytes)target.append(el('pre','workspace-binary-sample','File header\n'+data.bytes));}
+      };await load();
+    }catch(error){fallback(error.message);}
+  }
+  window.VisionWorkspace={render,openFiles,openPath,openURL,reloadShared,selectFile,closeItems,notify};reloadShared();
+})();

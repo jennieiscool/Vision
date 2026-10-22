@@ -1,0 +1,1 @@
+{"name":"vision-hermes-desktop","productName":"Vision","version":"1.0.0","main":"main.cjs","private":true,"devDependencies":{"electron":"45.0.0"},"dependencies":{"vision-hermes":"file:.."}}
