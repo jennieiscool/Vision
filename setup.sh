@@ -44,7 +44,7 @@ if [[ -z "$hermes_root" ]]; then
   trap 'rm -f "$installer"' EXIT
   printf 'Downloading the official Hermes Agent Linux installer...\n'
   curl --fail --location --silent --show-error https://hermes-agent.nousresearch.com/install.sh -o "$installer"
-  HERMES_HOME="$hermes_home" bash "$installer" --dir "$hermes_root" --non-interactive
+  HERMES_HOME="$hermes_home" bash "$installer" --dir "$hermes_root" --non-interactive || true
 fi
 export HERMES_HOME="$hermes_home"
 printf '%s' "$hermes_home" > "$runtime/hermes-home.txt"
