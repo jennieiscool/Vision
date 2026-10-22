@@ -37,8 +37,9 @@ ROOT = Path(__file__).resolve().parent.parent
 RUNTIME = ROOT / "runtime"
 RUNTIME.mkdir(exist_ok=True)
 CONFIG_PATH = RUNTIME / "config.json"
+HERMES_HOME = Path(os.environ.get("HERMES_HOME") or Path(os.environ["LOCALAPPDATA"]) / "hermes")
 CONFIG = {
-    "hermes_path": str(Path(os.environ["LOCALAPPDATA"]) / "hermes/hermes-agent"),
+    "hermes_path": str(HERMES_HOME / "hermes-agent"),
     "provider": "", "model": "", "cloud_first": True,
 }
 if CONFIG_PATH.exists():
@@ -49,7 +50,10 @@ if CONFIG.get("model", "").startswith("vision-qwen") or CONFIG.get("provider", "
     CONFIG.update(provider="", model="", cloud_first=True)
     CONFIG_PATH.write_text(json.dumps(CONFIG, indent=2))
 TOKEN = secrets.token_urlsafe(32)
-if (RUNTIME / 'hermes/hermes-agent').is_dir():
+if os.environ.get("HERMES_HOME"):
+    CONFIG['hermes_path'] = str(HERMES_HOME / "hermes-agent")
+    CONFIG_PATH.write_text(json.dumps(CONFIG, indent=2))
+elif (RUNTIME / 'hermes/hermes-agent').is_dir():
     CONFIG['hermes_path'] = str(RUNTIME / 'hermes/hermes-agent')
     CONFIG_PATH.write_text(json.dumps(CONFIG, indent=2))
 os.environ['PATH'] = os.pathsep.join(str(p) for p in [RUNTIME / 'node', RUNTIME / 'ffmpeg', RUNTIME / 'computer-driver']) + os.pathsep + os.environ.get('PATH', '')

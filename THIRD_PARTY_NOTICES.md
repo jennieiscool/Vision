@@ -4,7 +4,7 @@ Vision retrieves these independent projects and model assets when a user runs se
 
 ## Hermes Agent
 
-Hermes Agent is downloaded from [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) by its official Windows installer. The upstream project is MIT licensed; its copyright and license files are included in the local Hermes checkout under `runtime/hermes/hermes-agent/` after setup.
+Setup reuses an existing Hermes Agent installation when available. If Hermes is absent, setup downloads and runs the official Windows installer from [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent). The upstream project is MIT licensed; its copyright and license files are available in the local Hermes checkout after installation.
 
 ## Kokoro speech synthesis
 

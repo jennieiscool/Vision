@@ -3,6 +3,7 @@
 /node_modules/
 /desktop/node_modules/
 /runtime/
+/vendor/hermes-agent/
 /.openai/
 
 # Credentials, logs, and machine-specific state

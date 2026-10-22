@@ -6,7 +6,7 @@ Vision is a Windows desktop interface for Hermes Agent. The repository contains 
 
 1. Install Node.js 24 LTS on Windows 10 or 11.
 2. Download or clone this repository.
-3. Double-click `Setup.cmd`. It installs Hermes Agent under `runtime/hermes`, installs Vision's Python and Electron dependencies, and downloads the speech assets.
+3. Double-click `Setup.cmd`. It reuses a Hermes Agent installation it finds; only if none exists does it download the official installer and install Hermes under `runtime/hermes`. It also installs Vision's Python and Electron dependencies and downloads the speech assets.
 4. Double-click `Launch Vision.cmd`.
 5. In Vision, choose a cloud provider and sign in through Hermes. Vision does not choose a provider, include API keys, install Ollama, or download a local chat model.
 
@@ -22,7 +22,7 @@ The configured voice combines British English `bm_george` at 65% and `bm_fable` 
 
 ## Data and credentials
 
-The public source does not include `runtime/`, `.venv/`, `node_modules/`, downloaded model files, local databases, app profiles, conversation history, browser profiles, uploads, logs, environment files, or the private planning notes. The setup and launch scripts put generated state under the ignored runtime folder. Cloud credentials are entered by each user through Hermes and are not stored in frontend source.
+The public source does not include `runtime/`, `.venv/`, `node_modules/`, downloaded model files, local databases, app profiles, conversation history, browser profiles, uploads, logs, environment files, or the private planning notes. Setup and launch scripts reuse an existing Hermes install when available, otherwise generated Hermes and model files stay under ignored local folders. Cloud credentials are entered by each user through Hermes and are not stored in frontend source.
 
 Vision runs its local bridge on `127.0.0.1`. Hermes, speech recognition, speech synthesis, the browser, and terminal tools run on the user's computer. Cloud model requests go to the provider the user selects in Hermes and may incur that provider's charges.
 
