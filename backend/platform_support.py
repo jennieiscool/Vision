@@ -21,6 +21,12 @@ def hermes_command(home: Path, *args: str) -> list[str]:
     root = home / "hermes-agent"
     launcher = root / ".hermes/bin/hermes"
     if launcher.is_file():
+        python = next(iter(sorted((home / "tools").glob("python-*/bin/python3"))), None)
+        if python and len(args) > 1 and args[0] == "--run-module":
+            script = ("import sys,runpy;sys.path.insert(0,%r);import hermes_bootstrap;"
+                      "sys.path.insert(0,%r);runpy.run_module(%r,run_name='__main__',alter_sys=True)"
+                      % (str(root), str(Path(__file__).resolve().parents[1]), args[1]))
+            return [str(python), "-I", "-u", "-c", script]
         return [str(launcher), *args]
     python = root / ("venv/Scripts/python.exe" if IS_WINDOWS else "venv/bin/python")
     if args and args[0] == "--run-module":
